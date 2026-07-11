@@ -18,6 +18,7 @@ mkdir -p "$APP_BUNDLE/Contents/Resources"
 
 cp "$ROOT_DIR/.build/release/$APP_NAME" "$APP_BUNDLE/Contents/MacOS/$APP_NAME"
 cp "$ROOT_DIR/Packaging/Info.plist" "$APP_BUNDLE/Contents/Info.plist"
+cp "$ROOT_DIR/Packaging/AppIcon.icns" "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
 
 echo "==> Ad-hoc signing (required for Apple Silicon to launch at all)"
 codesign --force --deep --sign - "$APP_BUNDLE"
