@@ -2,6 +2,8 @@ import SwiftUI
 
 struct ContentView: View {
     @ObservedObject var model: StatusModel
+    @ObservedObject var pingModel: PingModel
+    @ObservedObject var proxyModel: ProxyModel
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -18,6 +20,8 @@ struct ContentView: View {
                 ok: !model.status.proxyEnabled
             )
 
+            proxyControls
+
             row(
                 title: "DNS",
                 value: model.status.dnsSet ? model.status.dnsServers.joined(separator: ", ") : "Default (DHCP)",
@@ -32,6 +36,26 @@ struct ContentView: View {
 
             Divider()
 
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Ping")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                HStack(spacing: 8) {
+                    TextField("Host or IP", text: $pingModel.address)
+                        .textFieldStyle(.roundedBorder)
+                        .onSubmit { pingModel.ping() }
+                    Button(pingModel.isRunning ? "…" : "Ping") {
+                        pingModel.ping()
+                    }
+                    .disabled(pingModel.isRunning || pingModel.address.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+                if !pingModel.summary.isEmpty {
+                    row(title: "Result", value: pingModel.summary, ok: pingModel.ok)
+                }
+            }
+
+            Divider()
+
             HStack {
                 Button("Refresh") {
                     model.refresh()
@@ -43,7 +67,49 @@ struct ContentView: View {
             }
         }
         .padding(14)
-        .frame(width: 280)
+        .frame(width: 300)
+    }
+
+    @ViewBuilder
+    private var proxyControls: some View {
+        DisclosureGroup("Change Proxy") {
+            VStack(alignment: .leading, spacing: 8) {
+                Picker("", selection: $proxyModel.type) {
+                    ForEach(ProxyType.allCases) { type in
+                        Text(type.rawValue).tag(type)
+                    }
+                }
+                .pickerStyle(.segmented)
+
+                HStack(spacing: 8) {
+                    TextField("Host", text: $proxyModel.host)
+                        .textFieldStyle(.roundedBorder)
+                    TextField("Port", text: $proxyModel.port)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 64)
+                }
+
+                HStack(spacing: 8) {
+                    Button(proxyModel.isBusy ? "…" : "Apply") {
+                        proxyModel.apply()
+                    }
+                    .disabled(proxyModel.isBusy)
+
+                    Button("Turn Off All") {
+                        proxyModel.turnOffAll()
+                    }
+                    .disabled(proxyModel.isBusy)
+                }
+
+                if !proxyModel.message.isEmpty {
+                    Text(proxyModel.message)
+                        .font(.caption)
+                        .foregroundStyle(proxyModel.ok == false ? Color.red : Color.secondary)
+                }
+            }
+            .padding(.top, 6)
+        }
+        .font(.caption)
     }
 
     @ViewBuilder

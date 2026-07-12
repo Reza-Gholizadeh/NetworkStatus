@@ -5,14 +5,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private var popover: NSPopover!
     private let model = StatusModel()
+    private let pingModel = PingModel()
+    private lazy var proxyModel = ProxyModel(
+        serviceName: { [weak model] in model?.status.serviceName },
+        onChange: { [weak model] in model?.refresh() }
+    )
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
 
         popover = NSPopover()
-        popover.contentSize = NSSize(width: 280, height: 220)
+        popover.contentSize = NSSize(width: 300, height: 300)
         popover.behavior = .transient
-        popover.contentViewController = NSHostingController(rootView: ContentView(model: model))
+
+        let hostingController = NSHostingController(
+            rootView: ContentView(model: model, pingModel: pingModel, proxyModel: proxyModel)
+        )
+        hostingController.sizingOptions = [.preferredContentSize]
+        popover.contentViewController = hostingController
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         if let button = statusItem.button {

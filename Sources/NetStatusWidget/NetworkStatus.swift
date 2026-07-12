@@ -10,12 +10,13 @@ struct NetworkStatus {
     var vpnName: String?
     var networkName: String
     var interface: String
+    var serviceName: String?
 
     static let empty = NetworkStatus(
         proxyEnabled: false, proxyDetails: [],
         dnsSet: false, dnsServers: [],
         vpnActive: false, vpnName: nil,
-        networkName: "Unknown", interface: "-"
+        networkName: "Unknown", interface: "-", serviceName: nil
     )
 }
 
@@ -197,7 +198,7 @@ enum NetworkInspector {
                 proxyEnabled: false, proxyDetails: [],
                 dnsSet: false, dnsServers: [],
                 vpnActive: vpn.isOn, vpnName: vpn.name,
-                networkName: "Not connected", interface: "-"
+                networkName: "Not connected", interface: "-", serviceName: nil
             )
         }
 
@@ -213,7 +214,8 @@ enum NetworkInspector {
             vpnActive: vpn.isOn,
             vpnName: vpn.name,
             networkName: networkName,
-            interface: port.device
+            interface: port.device,
+            serviceName: port.serviceName
         )
     }
 }
