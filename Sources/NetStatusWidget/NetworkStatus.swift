@@ -23,33 +23,32 @@ enum NetworkInspector {
 
     // MARK: - Primary service/interface resolution
 
-    private static func primaryInterface() -> String? {
-        let output = Shell.run("/sbin/route", ["get", "default"])
-        for line in output.split(separator: "\n") {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            if trimmed.hasPrefix("interface:") {
-                return trimmed
-                    .replacingOccurrences(of: "interface:", with: "")
-                    .trimmingCharacters(in: .whitespaces)
-            }
-        }
-        return nil
-    }
-
-    /// Maps a BSD device name (en0, en1, ...) to its (Hardware Port / networksetup service name, isWiFi)
-    private static func hardwarePortInfo(for device: String) -> (serviceName: String, isWiFi: Bool)? {
+    /// Finds the physical (Wi-Fi/Ethernet) hardware port that currently holds an IP address.
+    ///
+    /// Deliberately does NOT use `route get default`: once a VPN connects, the default route
+    /// points at its `utunN` tunnel interface, which isn't a "hardware port" networksetup knows
+    /// about. Scanning hardware ports directly keeps the reported network/proxy/DNS info tied to
+    /// the real physical connection regardless of whether a VPN has taken over routing.
+    private static func activePhysicalPort() -> (device: String, serviceName: String, isWiFi: Bool)? {
         let output = Shell.run("/usr/sbin/networksetup", ["-listallhardwareports"])
         let blocks = output.components(separatedBy: "\n\n")
         for block in blocks {
-            guard block.contains("Device: \(device)") else { continue }
-            for line in block.split(separator: "\n") {
-                if line.hasPrefix("Hardware Port:") {
-                    let name = line
-                        .replacingOccurrences(of: "Hardware Port:", with: "")
-                        .trimmingCharacters(in: .whitespaces)
-                    return (name, name.localizedCaseInsensitiveContains("wi-fi"))
-                }
-            }
+            let lines = block.split(separator: "\n")
+            guard let deviceLine = lines.first(where: { $0.hasPrefix("Device:") }),
+                  let portLine = lines.first(where: { $0.hasPrefix("Hardware Port:") })
+            else { continue }
+
+            let device = deviceLine
+                .replacingOccurrences(of: "Device:", with: "")
+                .trimmingCharacters(in: .whitespaces)
+            let portName = portLine
+                .replacingOccurrences(of: "Hardware Port:", with: "")
+                .trimmingCharacters(in: .whitespaces)
+
+            let ip = Shell.run("/usr/sbin/ipconfig", ["getifaddr", device])
+            guard !ip.isEmpty else { continue }
+
+            return (device, portName, portName.localizedCaseInsensitiveContains("wi-fi"))
         }
         return nil
     }
@@ -189,22 +188,22 @@ enum NetworkInspector {
     // MARK: - Public entry point
 
     static func fetch() -> NetworkStatus {
-        guard let device = primaryInterface() else {
-            return .empty
-        }
-        guard let port = hardwarePortInfo(for: device) else {
+        // Computed unconditionally: a VPN can be active regardless of whether we can resolve
+        // the underlying physical network below (see activePhysicalPort's doc comment).
+        let vpn = vpnStatus()
+
+        guard let port = activePhysicalPort() else {
             return NetworkStatus(
                 proxyEnabled: false, proxyDetails: [],
                 dnsSet: false, dnsServers: [],
-                vpnActive: false, vpnName: nil,
-                networkName: device, interface: device
+                vpnActive: vpn.isOn, vpnName: vpn.name,
+                networkName: "Not connected", interface: "-"
             )
         }
 
         let proxy = proxyStatus(service: port.serviceName)
         let dns = dnsStatus(service: port.serviceName)
-        let vpn = vpnStatus()
-        let networkName = port.isWiFi ? wifiNetworkName(device: device) : port.serviceName
+        let networkName = port.isWiFi ? wifiNetworkName(device: port.device) : port.serviceName
 
         return NetworkStatus(
             proxyEnabled: proxy.enabled,
@@ -214,7 +213,7 @@ enum NetworkInspector {
             vpnActive: vpn.isOn,
             vpnName: vpn.name,
             networkName: networkName,
-            interface: device
+            interface: port.device
         )
     }
 }
